@@ -303,27 +303,25 @@ def generate_brief_image(sched, content, now_et):
     buf.seek(0)
     return buf.read()
 
-# ── Image upload (commits brief.png to repo, returns raw GitHub URL) ─
+# ── Image upload (0x0.st — free, anonymous, public URL) ───────────
 def upload_image(img_bytes):
-    import subprocess
-
-    with open("brief.png", "wb") as f:
-        f.write(img_bytes)
-
-    subprocess.run(["git", "config", "user.email", "actions@github.com"], capture_output=True)
-    subprocess.run(["git", "config", "user.name", "GitHub Actions"], capture_output=True)
-    subprocess.run(["git", "add", "brief.png"], capture_output=True)
-
-    diff = subprocess.run(["git", "diff", "--staged", "--quiet"])
-    if diff.returncode != 0:
-        subprocess.run(["git", "commit", "-m", "chore: daily brief image [skip ci]"], capture_output=True)
-        subprocess.run(["git", "push"], capture_output=True)
-
-    sha = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-    repo = os.environ.get("GITHUB_REPOSITORY", "")
-    if repo and sha:
-        return f"https://raw.githubusercontent.com/{repo}/{sha}/brief.png"
-    return None
+    boundary = "Boundary0x0XYZ123"
+    body = (
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="file"; filename="brief.png"\r\n'
+        "Content-Type: image/png\r\n\r\n"
+    ).encode() + img_bytes + f"\r\n--{boundary}--\r\n".encode()
+    req = urllib.request.Request(
+        "https://0x0.st",
+        data=body,
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as r:
+        url = r.read().decode().strip()
+    if not url.startswith("http"):
+        raise ValueError(f"Unexpected response from 0x0.st: {url}")
+    return url
 
 # ── Slack block helpers ────────────────────────────────────────────
 def _chunks(text, limit=2900):
