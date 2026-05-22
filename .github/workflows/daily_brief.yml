@@ -1,24 +1,22 @@
 name: Daily Content Brief
-
-  "on":
-    schedule:
-      - cron: '0 11 * * *'
-    workflow_dispatch:
-
-  jobs:
-    send-brief:
-      runs-on: ubuntu-latest
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v4
-        - name: Set up Python
-          uses: actions/setup-python@v5
-          with:
-            python-version: '3.11'
-        - name: Install dependencies
-          run: pip install openai matplotlib Pillow
-        - name: Run daily brief
-          env:
-            SLACK_WEBHOOK:   ${{ secrets.SLACK_WEBHOOK }}
-            OPENAI_API_KEY:  ${{ secrets.OPENAI_API_KEY }}
-          run: python slack_daily.py
+on:
+  schedule:
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+jobs:
+  send-brief:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install openai matplotlib Pillow
+      - name: Run daily brief
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python slack_daily.py
