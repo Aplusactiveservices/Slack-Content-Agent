@@ -1,6 +1,6 @@
 name: Daily Content Brief
 
-  on:
+  "on":
     schedule:
       - cron: '0 11 * * *'
     workflow_dispatch:
