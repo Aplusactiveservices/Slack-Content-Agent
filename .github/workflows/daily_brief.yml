@@ -3,6 +3,8 @@ on:
   schedule:
     - cron: '0 11 * * *'
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   send-brief:
     runs-on: ubuntu-latest
@@ -19,4 +21,6 @@ jobs:
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
         run: python slack_daily.py
