@@ -335,76 +335,70 @@ def _chunks(text, limit=2900):
     blocks.append(text)
     return [{"type": "section", "text": {"type": "mrkdwn", "text": c}} for c in blocks if c.strip()]
 
-def build_blocks(sched, content, now_et, refreshed, image_url=None):
+def build_blocks(sched, content, now_et, refreshed):
     day, emoji, platform = sched["day"], sched["emoji"], sched["platform"]
     date_str   = now_et.strftime("%B %d, %Y")
     refresh_ts = now_et.strftime("%I:%M %p ET") if refreshed else "static fallback"
 
     blocks = []
 
-    if image_url:
-        # Visual card at top — quick glance view
-        blocks.append({
-            "type": "image",
-            "image_url": image_url,
-            "alt_text": f"Content brief for {day} — {platform}",
-        })
-        blocks.append({"type": "divider"})
-        # Small label before script
+    blocks.append({"type": "header", "text": {
+        "type": "plain_text",
+        "text": f"{emoji} Anthony's Content Brief — {day}, {date_str}",
+        "emoji": True,
+    }})
+    blocks.append({"type": "divider"})
+    blocks.append({"type": "section", "fields": [
+        {"type": "mrkdwn", "text": f"*Platform*\n{platform}"},
+        {"type": "mrkdwn", "text": f"*Best Time*\n{content['best_time']}"},
+    ]})
+    blocks.append({"type": "section", "text": {"type": "mrkdwn",
+        "text": f"*What to Post*\n{content['what_to_post']}"}})
+    if content.get("trending_note"):
         blocks.append({"type": "section", "text": {"type": "mrkdwn",
-            "text": f"*📜 SCRIPT — {platform} ({day})*"}})
-    else:
-        # Text-only fallback header
-        blocks.append({"type": "header", "text": {
-            "type": "plain_text",
-            "text": f"{emoji} Anthony's Content Brief — {day}, {date_str}",
-            "emoji": True,
-        }})
-        blocks.append({"type": "divider"})
-        blocks.append({"type": "section", "fields": [
-            {"type": "mrkdwn", "text": f"*📱 Platform*\n{platform}"},
-            {"type": "mrkdwn", "text": f"*⏰ Best Time*\n{content['best_time']}"},
-        ]})
-        blocks.append({"type": "section", "text": {"type": "mrkdwn",
-            "text": f"*📝 What to Post*\n{content['what_to_post']}"}})
-        if content.get("trending_note"):
-            blocks.append({"type": "section", "text": {"type": "mrkdwn",
-                "text": f"*📈 Trending*\n_{content['trending_note']}_"}})
-        blocks.append({"type": "section", "text": {"type": "mrkdwn",
-            "text": f"*🎣 Hook*\n\"{content['hook']}\""}})
-        blocks.append({"type": "divider"})
-        blocks.append({"type": "section", "text": {"type": "mrkdwn",
-            "text": f"*📜 SCRIPT*"}})
-
+            "text": f"*Trending*\n_{content['trending_note']}_"}})
+    blocks.append({"type": "section", "text": {"type": "mrkdwn",
+        "text": f"*Hook*\n\"{content['hook']}\""}})
+    blocks.append({"type": "divider"})
+    blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "*SCRIPT*"}})
     blocks.extend(_chunks(content["script"]))
 
     if content.get("thumbnail_prompt"):
         blocks.append({"type": "divider"})
         blocks.append({"type": "section", "text": {"type": "mrkdwn",
-            "text": f"*🖼️ THUMBNAIL PROMPT*\n{content['thumbnail_prompt']}"}})
+            "text": f"*THUMBNAIL PROMPT*\n{content['thumbnail_prompt']}"}})
 
     if content.get("description"):
         blocks.append({"type": "divider"})
-        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "*📄 DESCRIPTION*"}})
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "*DESCRIPTION*"}})
         blocks.extend(_chunks(content["description"]))
 
     blocks.append({"type": "context", "elements": [
-        {"type": "mrkdwn", "text": f"🤖 AI-refreshed {refresh_ts}  ·  Content Creator AI Agent"}
+        {"type": "mrkdwn", "text": f"AI-refreshed {refresh_ts}  ·  Content Creator AI Agent"}
     ]})
 
     return blocks
 
 # ── Send to Slack ──────────────────────────────────────────────────
-def send_slack(blocks):
-    payload = json.dumps({"blocks": blocks}).encode("utf-8")
+def send_slack(blocks, image_url=None):
+    payload_dict = {"blocks": blocks}
+    if image_url:
+        payload_dict["attachments"] = [{"fallback": "Daily brief card", "image_url": image_url}]
+    payload = json.dumps(payload_dict).encode("utf-8")
+    log(f"Payload size: {len(payload)} bytes, {len(blocks)} blocks")
     req = urllib.request.Request(
         SLACK_WEBHOOK,
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=15) as r:
-        return r.read().decode("utf-8")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return r.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8")
+        log(f"Slack error detail: {body}")
+        raise
 
 # ── Main ───────────────────────────────────────────────────────────
 def main():
@@ -443,8 +437,8 @@ def main():
 
     # Send to Slack
     try:
-        blocks   = build_blocks(sched, content, now_et, refreshed, image_url)
-        response = send_slack(blocks)
+        blocks   = build_blocks(sched, content, now_et, refreshed)
+        response = send_slack(blocks, image_url=image_url)
         log(f"Slack response: {response}")
     except Exception as e:
         log(f"Slack send failed: {e}\n{traceback.format_exc()}")
