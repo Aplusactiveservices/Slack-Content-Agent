@@ -303,24 +303,27 @@ def generate_brief_image(sched, content, now_et):
     buf.seek(0)
     return buf.read()
 
-# ── Image upload (catbox.moe — free, no account needed) ───────────
+# ── Image upload (commits brief.png to repo, returns raw GitHub URL) ─
 def upload_image(img_bytes):
-    boundary = "FormBoundary4Yu5H8g3K"
-    body = (
-        f"--{boundary}\r\n"
-        'Content-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n'
-        f"--{boundary}\r\n"
-        'Content-Disposition: form-data; name="fileToUpload"; filename="brief.png"\r\n'
-        "Content-Type: image/png\r\n\r\n"
-    ).encode() + img_bytes + f"\r\n--{boundary}--\r\n".encode()
-    req = urllib.request.Request(
-        "https://catbox.moe/user/api.php",
-        data=body,
-        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return r.read().decode("utf-8").strip()
+    import subprocess
+
+    with open("brief.png", "wb") as f:
+        f.write(img_bytes)
+
+    subprocess.run(["git", "config", "user.email", "actions@github.com"], capture_output=True)
+    subprocess.run(["git", "config", "user.name", "GitHub Actions"], capture_output=True)
+    subprocess.run(["git", "add", "brief.png"], capture_output=True)
+
+    diff = subprocess.run(["git", "diff", "--staged", "--quiet"])
+    if diff.returncode != 0:
+        subprocess.run(["git", "commit", "-m", "chore: daily brief image [skip ci]"], capture_output=True)
+        subprocess.run(["git", "push"], capture_output=True)
+
+    sha = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if repo and sha:
+        return f"https://raw.githubusercontent.com/{repo}/{sha}/brief.png"
+    return None
 
 # ── Slack block helpers ────────────────────────────────────────────
 def _chunks(text, limit=2900):
